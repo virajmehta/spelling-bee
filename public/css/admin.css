@@ -1,0 +1,240 @@
+/* ─── Admin Grid ─── */
+.admin-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.admin-grid > * {
+  animation: card-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.admin-grid > :nth-child(1) { animation-delay: 0.05s; }
+.admin-grid > :nth-child(2) { animation-delay: 0.1s; }
+.admin-grid > :nth-child(3) { animation-delay: 0.15s; }
+.admin-grid > :nth-child(4) { animation-delay: 0.2s; }
+.admin-grid > :nth-child(5) { animation-delay: 0.25s; }
+.admin-grid > :nth-child(6) { animation-delay: 0.3s; }
+
+@media (min-width: 768px) {
+  .admin-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .admin-grid .full-width {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ─── Turn Controls ─── */
+.turn-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ─── Speller Admin Row ─── */
+.speller-admin-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.25);
+  transition: background 0.2s, padding 0.2s;
+}
+
+.speller-admin-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+  padding-left: 6px;
+  padding-right: 6px;
+  margin-left: -6px;
+  margin-right: -6px;
+  border-radius: 6px;
+}
+
+.speller-admin-row:last-child {
+  border-bottom: none;
+}
+
+.speller-admin-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ─── Word Card ─── */
+.word-card {
+  padding: 10px 14px;
+  background: var(--bg-surface);
+  border-radius: var(--radius);
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  border: 1px solid rgba(51, 65, 85, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.word-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--gold);
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.word-card:hover {
+  border-color: rgba(245, 197, 24, 0.3);
+  transform: translateX(2px);
+}
+
+.word-card:hover::before {
+  opacity: 0.6;
+}
+
+.word-card.selected {
+  border-color: var(--gold);
+  background: rgba(245, 197, 24, 0.08);
+  box-shadow: 0 0 15px rgba(245, 197, 24, 0.1);
+}
+
+.word-card.selected::before {
+  opacity: 1;
+}
+
+.word-card .word-text {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.word-card .word-def {
+  font-size: 0.8rem;
+  color: var(--gray);
+  margin-top: 3px;
+  line-height: 1.4;
+}
+
+/* ─── Round Badge ─── */
+.round-badge {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+/* ─── Setup Section ─── */
+.setup-section {
+  border: 2px dashed var(--gray-dark);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 16px;
+  transition: border-color 0.3s;
+}
+
+.setup-section:hover {
+  border-color: rgba(245, 197, 24, 0.3);
+}
+
+/* ─── Speller Textarea ─── */
+.textarea-spellers {
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* ─── Chip Input ─── */
+.chip-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.chip-input-row input { flex: 1; }
+
+/* ─── Gambler Chip Row ─── */
+.gambler-chip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.25);
+  transition: background 0.2s;
+}
+
+.gambler-chip-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.gambler-chip-row:last-child {
+  border-bottom: none;
+}
+
+.gambler-chip-row .name { font-weight: 500; }
+.gambler-chip-row .balance { font-family: var(--font-mono); color: var(--gold); }
+
+/* ─── Room Code Card ─── */
+.room-code-card {
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(245, 197, 24, 0.15);
+  animation: card-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.room-code-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(245,197,24,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.room-code-label {
+  font-size: 0.72rem;
+  color: var(--gray);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-weight: 600;
+  position: relative;
+}
+
+.room-code-value {
+  font-family: var(--font-mono);
+  font-size: 2.4rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  margin: 10px 0;
+  position: relative;
+  background: linear-gradient(135deg, var(--gold) 0%, #ffd740 50%, var(--gold) 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: text-shimmer 4s ease-in-out infinite;
+  filter: drop-shadow(0 0 20px rgba(245,197,24,0.3));
+}
+
+.room-code-hint {
+  font-size: 0.8rem;
+  color: var(--gray);
+  position: relative;
+}
+
+/* ─── Details/Summary ─── */
+details summary {
+  transition: color 0.2s;
+}
+
+details summary:hover {
+  color: #ffd740 !important;
+}
+
+details[open] summary {
+  margin-bottom: 8px;
+}

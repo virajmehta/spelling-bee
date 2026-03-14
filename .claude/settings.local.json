@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(interview)",
+      "WebSearch",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm approve-builds:*)",
+      "Bash(npx -y pnpm@10.6.5 config set:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx wrangler d1 execute:*)",
+      "Bash(curl:*)"
+    ]
+  }
+}

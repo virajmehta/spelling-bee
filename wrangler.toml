@@ -1,0 +1,11 @@
+name = "spelling-bee"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+assets = { directory = "public" }
+
+[[d1_databases]]
+binding = "DB"
+database_name = "spelling-bee-db"
+database_id = "local"
+migrations_dir = "migrations"

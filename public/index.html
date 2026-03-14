@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spelling Bee Betting Pool</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐝</text></svg>">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <style>
+    .join-page {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Honeycomb background pattern */
+    .join-page::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      opacity: 0.5;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23f5c518' fill-opacity='0.04'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    /* Floating light orbs */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: -1;
+    }
+    .orb-1 {
+      width: 400px; height: 400px;
+      background: rgba(245, 197, 24, 0.08);
+      top: -10%; left: -5%;
+      animation: float-1 18s ease-in-out infinite alternate;
+    }
+    .orb-2 {
+      width: 300px; height: 300px;
+      background: rgba(59, 130, 246, 0.06);
+      bottom: -5%; right: -8%;
+      animation: float-2 22s ease-in-out infinite alternate;
+    }
+    .orb-3 {
+      width: 200px; height: 200px;
+      background: rgba(168, 85, 247, 0.05);
+      top: 60%; left: 60%;
+      animation: float-3 15s ease-in-out infinite alternate;
+    }
+
+    @keyframes float-1 {
+      0%   { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(60px, 80px) scale(1.2); }
+    }
+    @keyframes float-2 {
+      0%   { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(-50px, -60px) scale(1.1); }
+    }
+    @keyframes float-3 {
+      0%   { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(-40px, 30px) scale(0.9); }
+    }
+
+    .join-card {
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 40px 32px;
+      max-width: 400px;
+      width: 100%;
+      box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        0 0 40px rgba(245, 197, 24, 0.05);
+      animation: card-appear 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    @keyframes card-appear {
+      from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.96);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .join-bee {
+      text-align: center;
+      font-size: 2.4rem;
+      margin-bottom: 8px;
+      animation: bee-float 3s ease-in-out infinite;
+      filter: drop-shadow(0 0 12px rgba(245, 197, 24, 0.3));
+    }
+
+    @keyframes bee-float {
+      0%, 100% { transform: translateY(0) rotate(-2deg); }
+      50% { transform: translateY(-6px) rotate(2deg); }
+    }
+
+    .join-title {
+      font-family: var(--font-display);
+      font-size: 2.4rem;
+      font-weight: 800;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 2px;
+      background: linear-gradient(135deg, var(--gold) 0%, #ffd740 50%, var(--gold) 100%);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: text-shimmer 4s ease-in-out infinite;
+      filter: drop-shadow(0 0 30px rgba(245, 197, 24, 0.3));
+    }
+
+    .join-subtitle {
+      text-align: center;
+      color: var(--gray);
+      font-size: 0.85rem;
+      margin-bottom: 28px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      font-family: var(--font-display);
+      font-weight: 400;
+    }
+
+    .role-select {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .role-btn {
+      flex: 1;
+      padding: 11px;
+      background: var(--bg-surface);
+      border: 1px solid var(--gray-dark);
+      border-radius: var(--radius);
+      color: var(--gray);
+      text-align: center;
+      cursor: pointer;
+      font-family: var(--font-display);
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+      transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .role-btn:hover {
+      border-color: rgba(245, 197, 24, 0.4);
+      color: var(--white);
+    }
+
+    .role-btn.selected {
+      border-color: var(--gold);
+      background: rgba(245, 197, 24, 0.1);
+      color: var(--gold);
+      box-shadow: 0 0 15px rgba(245, 197, 24, 0.1);
+    }
+
+    .admin-secret { display: none; }
+    .admin-secret.visible { display: block; }
+    .admin-fields { display: none; }
+    .admin-fields.visible { display: block; }
+
+    .mode-toggle {
+      display: flex;
+      gap: 0;
+      margin-bottom: 16px;
+      border: 1px solid var(--gray-dark);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .mode-toggle button {
+      flex: 1;
+      padding: 9px;
+      background: var(--bg-surface);
+      border: none;
+      color: var(--gray);
+      cursor: pointer;
+      font-family: var(--font-display);
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+      transition: all 0.25s;
+    }
+
+    .mode-toggle button:hover {
+      color: var(--white);
+    }
+
+    .mode-toggle button.active {
+      background: rgba(245, 197, 24, 0.12);
+      color: var(--gold);
+    }
+
+    .error-msg {
+      color: var(--red);
+      font-size: 0.8rem;
+      margin-top: 10px;
+      text-align: center;
+      font-weight: 500;
+    }
+
+    .expired-msg {
+      color: var(--gold);
+      font-size: 0.85rem;
+      text-align: center;
+      margin-bottom: 16px;
+      padding: 10px;
+      background: rgba(245, 197, 24, 0.08);
+      border-radius: var(--radius);
+      border: 1px solid rgba(245, 197, 24, 0.2);
+    }
+
+    .room-code-display {
+      text-align: center;
+      padding: 14px;
+      margin-top: 14px;
+      background: rgba(245, 197, 24, 0.08);
+      border: 1px solid rgba(245, 197, 24, 0.25);
+      border-radius: var(--radius);
+      font-family: var(--font-mono);
+      font-size: 1.4rem;
+      color: var(--gold);
+      letter-spacing: 0.15em;
+    }
+
+    /* Form fields stagger animation */
+    .join-card .form-group,
+    .join-card .role-select,
+    .join-card .btn--block {
+      animation: field-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    .join-card > :nth-child(1) { animation-delay: 0.1s; }
+    .join-card > :nth-child(2) { animation-delay: 0.15s; }
+    .join-card form .form-group:nth-child(1) { animation-delay: 0.2s; }
+    .join-card form .form-group:nth-child(2) { animation-delay: 0.25s; }
+    .join-card form .btn--block { animation-delay: 0.35s; }
+
+    @keyframes field-enter {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 480px) {
+      .join-card { padding: 28px 20px; }
+      .join-title { font-size: 1.9rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="join-page">
+    <!-- Floating light orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="join-card">
+      <div class="join-bee">🐝</div>
+      <div class="join-title">Spelling Bee</div>
+      <div class="join-subtitle">Betting Pool Party</div>
+
+      <div id="expired-msg" class="expired-msg" style="display:none">Session expired — please rejoin</div>
+
+      <form id="join-form">
+        <div class="form-group">
+          <label>Your Name</label>
+          <input type="text" id="display-name" placeholder="Display name" required maxlength="30">
+        </div>
+
+        <div class="form-group">
+          <label>Role</label>
+          <div class="role-select">
+            <div class="role-btn selected" data-role="gambler">Gambler</div>
+            <div class="role-btn" data-role="admin">Admin</div>
+          </div>
+        </div>
+
+        <!-- Admin: choose join vs create -->
+        <div id="admin-mode-toggle" class="admin-fields">
+          <div class="mode-toggle">
+            <button type="button" id="mode-join" class="active">Join Existing Room</button>
+            <button type="button" id="mode-create">Create New Room</button>
+          </div>
+        </div>
+
+        <!-- Join existing room fields (default) -->
+        <div id="join-fields">
+          <div class="form-group">
+            <label>Room Code</label>
+            <input type="text" id="room-code" placeholder="Enter room code" autocapitalize="characters" maxlength="10">
+          </div>
+        </div>
+
+        <!-- Create new room fields (admin only) -->
+        <div id="create-fields" style="display:none">
+          <div class="form-group">
+            <label>Room Name</label>
+            <input type="text" id="room-name" placeholder="e.g. Annual Spelling Bee" maxlength="50">
+          </div>
+        </div>
+
+        <div id="admin-secret-group" class="form-group admin-secret">
+          <label>Admin Secret</label>
+          <input type="password" id="admin-secret" placeholder="Enter admin secret">
+        </div>
+
+        <button type="submit" class="btn btn--gold btn--block" id="join-btn">Join Room</button>
+        <div id="error-msg" class="error-msg"></div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module">
+    import { setAuth, getAuth, redirectByRole } from '/js/auth.js';
+
+    // If already authenticated, redirect
+    const existing = getAuth();
+    if (existing) redirectByRole(existing.role);
+
+    // Show expired message if redirected
+    if (new URLSearchParams(window.location.search).get('expired')) {
+      document.getElementById('expired-msg').style.display = 'block';
+    }
+
+    // Role selection
+    let selectedRole = 'gambler';
+    let createMode = false;
+
+    document.querySelectorAll('.role-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedRole = btn.dataset.role;
+        const isAdmin = selectedRole === 'admin';
+        document.getElementById('admin-secret-group').classList.toggle('visible', isAdmin);
+        document.getElementById('admin-mode-toggle').classList.toggle('visible', isAdmin);
+        if (!isAdmin) {
+          createMode = false;
+          document.getElementById('join-fields').style.display = '';
+          document.getElementById('create-fields').style.display = 'none';
+          document.getElementById('join-btn').textContent = 'Join Room';
+        }
+      });
+    });
+
+    // Mode toggle (join vs create)
+    document.getElementById('mode-join').addEventListener('click', () => {
+      createMode = false;
+      document.getElementById('mode-join').classList.add('active');
+      document.getElementById('mode-create').classList.remove('active');
+      document.getElementById('join-fields').style.display = '';
+      document.getElementById('create-fields').style.display = 'none';
+      document.getElementById('join-btn').textContent = 'Join Room';
+    });
+
+    document.getElementById('mode-create').addEventListener('click', () => {
+      createMode = true;
+      document.getElementById('mode-create').classList.add('active');
+      document.getElementById('mode-join').classList.remove('active');
+      document.getElementById('join-fields').style.display = 'none';
+      document.getElementById('create-fields').style.display = '';
+      document.getElementById('join-btn').textContent = 'Create Room';
+    });
+
+    // Join/Create form
+    document.getElementById('join-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById('error-msg');
+      errEl.textContent = '';
+
+      const displayName = document.getElementById('display-name').value.trim();
+      const adminSecret = document.getElementById('admin-secret').value.trim();
+
+      if (!displayName) {
+        errEl.textContent = 'Please enter your name';
+        return;
+      }
+
+      const joinBtn = document.getElementById('join-btn');
+      joinBtn.disabled = true;
+      joinBtn.textContent = createMode ? 'Creating...' : 'Joining...';
+
+      try {
+        let res, data;
+
+        if (createMode) {
+          const roomName = document.getElementById('room-name').value.trim();
+          if (!roomName) throw new Error('Please enter a room name');
+          if (!adminSecret) throw new Error('Admin secret is required');
+
+          res = await fetch('/api/auth/create-room', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roomName, displayName, adminSecret }),
+          });
+          data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Create failed');
+
+          setAuth({ ...data, displayName, roomName: data.roomName });
+          redirectByRole('admin');
+        } else {
+          const code = document.getElementById('room-code').value.trim();
+          if (!code) throw new Error('Please enter a room code');
+
+          res = await fetch('/api/auth/join', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code, displayName, role: selectedRole, adminSecret: adminSecret || undefined }),
+          });
+          data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Join failed');
+
+          setAuth({ ...data, displayName });
+          redirectByRole(data.role);
+        }
+      } catch (err) {
+        errEl.textContent = err.message;
+        joinBtn.disabled = false;
+        joinBtn.textContent = createMode ? 'Create Room' : 'Join Room';
+      }
+    });
+  </script>
+</body>
+</html>

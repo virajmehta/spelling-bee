@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Spelling Bee Pool</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐝</text></svg>">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <div class="container container--wide">
+    <div class="header">
+      <div class="flex-between">
+        <h1>Bee Control Room</h1>
+        <button class="btn btn--outline btn--sm" id="logout-btn">Leave Room</button>
+      </div>
+      <div class="subtitle" id="room-info">Loading...</div>
+    </div>
+
+    <div id="status-bar"></div>
+
+    <!-- Room Code Share Card -->
+    <div class="card room-code-card" id="room-code-card">
+      <div class="room-code-label">Share This Code</div>
+      <div class="room-code-value" id="room-code-display">---</div>
+      <div class="room-code-hint">Gamblers & observers join with the code above</div>
+    </div>
+
+    <!-- Main Admin Grid -->
+    <div class="admin-grid" id="main-admin">
+
+      <!-- Speller Management -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Spellers</h2>
+          <span id="active-speller-count" class="text-sm text-gray"></span>
+        </div>
+        <div id="speller-list"></div>
+        <details class="mt-16">
+          <summary class="text-sm text-gold" style="cursor:pointer">Add Spellers</summary>
+          <div class="mt-8">
+            <div class="form-group">
+              <label>Names (one per line)</label>
+              <textarea id="add-spellers-text" class="textarea-spellers" placeholder="Alice&#10;Bob&#10;Charlie"></textarea>
+            </div>
+            <button class="btn btn--gold btn--sm" id="add-spellers-btn">Add Spellers</button>
+          </div>
+        </details>
+      </div>
+
+      <!-- Round / Turn Controls -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Bee Controls</h2>
+          <span id="round-status" class="round-badge"></span>
+        </div>
+
+        <div id="no-round-msg" class="empty-state">No active round</div>
+
+        <div id="round-controls">
+          <div class="form-group">
+            <label>Difficulty Tier</label>
+            <select id="difficulty-tier">
+              <option value="1">Tier 1 — Easy</option>
+              <option value="2">Tier 2 — Medium</option>
+              <option value="3">Tier 3 — Hard</option>
+              <option value="4">Tier 4 — Expert</option>
+              <option value="5">Tier 5 — Championship</option>
+            </select>
+          </div>
+          <button class="btn btn--gold btn--block" id="start-round-btn">Start Round</button>
+        </div>
+
+        <div id="active-round" style="display:none">
+          <div class="mb-8">
+            <div class="flex-between">
+              <div id="round-label" class="text-gold"></div>
+              <button class="btn btn--outline btn--sm" id="complete-round-btn">End Round</button>
+            </div>
+          </div>
+
+          <!-- Turn creation -->
+          <div class="mb-16">
+            <label>Next Speller</label>
+            <select id="turn-speller" class="mb-8"></select>
+
+            <label>Word</label>
+            <div id="word-list" class="mb-8" style="max-height:200px;overflow-y:auto"></div>
+            <input type="text" id="custom-word" placeholder="Or type a custom word" class="mb-8">
+
+            <button class="btn btn--gold btn--block" id="create-turn-btn">Call Speller</button>
+          </div>
+
+          <!-- Current turns -->
+          <div>
+            <h3 class="text-gold mb-8">Current Turns</h3>
+            <div id="current-turns"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chip Management -->
+      <div class="card">
+        <div class="card-header"><h2>Chip Credits</h2></div>
+        <div class="chip-input-row mb-16">
+          <div class="form-group" style="flex:1;margin-bottom:0">
+            <label>Amount for All</label>
+            <input type="number" id="credit-all-amount" placeholder="1000" min="1">
+          </div>
+          <button class="btn btn--gold btn--sm" id="credit-all-btn">Credit All</button>
+        </div>
+        <div id="gambler-list"></div>
+      </div>
+
+      <!-- Odds / Pool -->
+      <div class="card">
+        <div class="card-header"><h2>Live Odds</h2></div>
+        <div id="admin-odds"></div>
+      </div>
+
+      <!-- Finish Bee -->
+      <div class="card">
+        <div class="card-header"><h2>Finish Bee</h2></div>
+        <div class="form-group">
+          <label>Declare Winner</label>
+          <select id="winner-select"></select>
+        </div>
+        <button class="btn btn--red btn--block" id="finish-btn">Declare Winner & Finish</button>
+      </div>
+
+      <!-- Word Import -->
+      <div class="card">
+        <div class="card-header"><h2>Words</h2></div>
+        <button class="btn btn--outline btn--block" id="import-words-btn">Import Default Word List</button>
+        <div id="import-status" class="text-sm text-gray mt-8"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/admin-app.js"></script>
+</body>
+</html>
