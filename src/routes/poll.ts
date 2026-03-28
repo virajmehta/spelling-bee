@@ -12,7 +12,7 @@ poll.get('/', async (c) => {
 
   // Check room version
   const room = await c.env.DB.prepare(
-    'SELECT id, code, name, status, current_round_id, betting_open, version FROM rooms WHERE id = ?'
+    'SELECT id, code, name, status, current_round_id, betting_open, version, speller_order FROM rooms WHERE id = ?'
   )
     .bind(roomId)
     .first<Room>();
@@ -62,6 +62,10 @@ poll.get('/', async (c) => {
     activeSpellers
   );
 
+  // Parse room speller order
+  let spellerOrder: string[] = [];
+  try { spellerOrder = JSON.parse((room as any).speller_order || '[]'); } catch {}
+
   const response: any = {
     room: {
       id: room.id,
@@ -70,6 +74,7 @@ poll.get('/', async (c) => {
       status: room.status,
       bettingOpen: !!room.betting_open,
       version: room.version,
+      spellerOrder,
     },
     spellers,
     rounds: roundsResult.results,

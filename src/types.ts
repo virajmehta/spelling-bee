@@ -20,6 +20,7 @@ export interface Room {
   current_round_id: string | null;
   betting_open: number; // 0 or 1
   version: number;
+  speller_order: string; // JSON array of speller IDs
   created_at: string;
 }
 

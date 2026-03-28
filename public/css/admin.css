@@ -363,6 +363,31 @@
   font-size: 0.9rem;
 }
 
+/* ─── Bee Action Bar ─── */
+.bee-action-bar {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.bee-action-bar .btn--lg {
+  padding: 14px 32px;
+  font-size: 1rem;
+  flex: 1;
+  max-width: 200px;
+}
+
+.next-up-label {
+  text-align: center;
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+  color: var(--white);
+}
+
+.next-up-label strong {
+  color: var(--gold);
+}
+
 /* ─── Admin Tabs ─── */
 .admin-tabs {
   display: flex;

@@ -101,18 +101,16 @@ function render(data) {
     liveTurnEl.style.display = 'none';
   }
 
-  // Upcoming spellers (during active round)
+  // Upcoming spellers (during active round, using room-level order)
   const upcomingEl = document.getElementById('upcoming-spellers');
   const activeRound = data.rounds?.find(r => r.status === 'active');
-  if (activeRound && activeRound.speller_order && !data.room.bettingOpen) {
-    const spellerOrder = typeof activeRound.speller_order === 'string'
-      ? JSON.parse(activeRound.speller_order) : activeRound.speller_order;
+  if (activeRound && data.room.spellerOrder?.length && !data.room.bettingOpen) {
     const completedSpellerIds = new Set(turns.map(t => t.speller_id));
     const allSpellers = data.spellers || [];
-    const upcoming = spellerOrder
+    const upcoming = data.room.spellerOrder
       .filter(id => !completedSpellerIds.has(id))
       .map(id => allSpellers.find(s => s.id === id))
-      .filter(Boolean);
+      .filter(s => s && s.status === 'active');
 
     if (upcoming.length > 0) {
       upcomingEl.style.display = '';

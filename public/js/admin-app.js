@@ -1,16 +1,14 @@
 import { requireAuth, clearAuth } from '/js/auth.js';
 import { apiPost, apiPatch, apiGet, apiDelete } from '/js/api.js';
 import { Poller } from '/js/poll.js';
-import { showToast, renderStatusBar, renderOddsTable, renderCurrentTurns } from '/js/components.js';
+import { showToast, renderStatusBar, renderOddsTable } from '/js/components.js';
 import { formatChips } from '/js/format.js';
-import { showPayoutReveal } from '/js/animations.js';
 
 const auth = requireAuth('admin');
 if (!auth) throw new Error('Not authorized');
 
 let state = null;
 let currentRoundId = null;
-let selectedWord = null;
 
 document.getElementById('room-info').textContent = `${auth.roomName || 'Room'} — ${auth.displayName}`;
 
@@ -68,54 +66,70 @@ document.getElementById('complete-round-btn').addEventListener('click', async ()
   }
 });
 
-// --- Turn Creation ---
-document.getElementById('create-turn-btn').addEventListener('click', async () => {
-  const spellerId = document.getElementById('turn-speller').value;
-  const customWord = document.getElementById('custom-word').value.trim();
-  const word = selectedWord || customWord || null;
-
-  if (!spellerId) return showToast('Select a speller', 'error');
-  if (!currentRoundId) return showToast('No active round', 'error');
+// --- Bee Actions (delegated) ---
+document.getElementById('bee-actions').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn || btn.disabled) return;
+  const action = btn.dataset.action;
 
   try {
-    await apiPost('/bee/turns', { roundId: currentRoundId, spellerId, word });
-    document.getElementById('custom-word').value = '';
-    selectedWord = null;
-    showToast('Turn created');
-    loadNextWord();
-    poller.forcePoll();
+    if (action === 'call') {
+      // Auto-create turn with next speller + next word
+      const nextSpellerId = btn.dataset.spellerId;
+      if (!nextSpellerId || !currentRoundId) return;
+      // Fetch next word server-side
+      const wordData = await apiGet('/bee/words/next');
+      const word = wordData.word?.word || null;
+      await apiPost('/bee/turns', { roundId: currentRoundId, spellerId: nextSpellerId, word });
+      showToast('Speller called');
+      poller.forcePoll();
+    } else if (action === 'skip-word') {
+      await apiPost('/bee/words/skip', {});
+      showToast('Word skipped');
+    } else if (action === 'skip-speller') {
+      const spellerId = btn.dataset.spellerId;
+      if (!spellerId || !currentRoundId) return;
+      const res = await apiPost('/bee/turns', { roundId: currentRoundId, spellerId });
+      await apiPatch(`/bee/turns/${res.id}`, { result: 'correct' });
+      showToast('Speller skipped');
+      poller.forcePoll();
+    } else if (action === 'correct') {
+      await apiPatch(`/bee/turns/${btn.dataset.turnId}`, { result: 'correct' });
+      showToast('Correct!');
+      poller.forcePoll();
+    } else if (action === 'incorrect') {
+      await apiPatch(`/bee/turns/${btn.dataset.turnId}`, { result: 'incorrect' });
+      // Auto-eliminate on incorrect
+      await apiPost(`/bee/spellers/${btn.dataset.spellerId}/eliminate`, {});
+      showToast('Incorrect — eliminated');
+      poller.forcePoll();
+    } else if (action === 'undo') {
+      await apiPatch(`/bee/turns/${btn.dataset.turnId}`, { result: null });
+      // If speller was eliminated, reinstate them
+      if (btn.dataset.spellerId) {
+        await apiPost(`/bee/spellers/${btn.dataset.spellerId}/reinstate`, {});
+      }
+      showToast('Undone');
+      poller.forcePoll();
+    }
   } catch (err) {
     showToast(err.message, 'error');
   }
 });
 
-// --- Turn Result (delegated click on result buttons) ---
+// --- Turn History Undo (delegated) ---
 document.getElementById('current-turns').addEventListener('click', async (e) => {
-  const btn = e.target.closest('[data-turn-action]');
+  const btn = e.target.closest('[data-action="undo"]');
   if (!btn) return;
-
-  const turnId = btn.dataset.turnId;
-  const action = btn.dataset.turnAction;
-
-  if (action === 'correct' || action === 'incorrect') {
-    try {
-      await apiPatch(`/bee/turns/${turnId}`, { result: action });
-      showToast(`Marked ${action}`);
-      poller.forcePoll();
-    } catch (err) {
-      showToast(err.message, 'error');
+  try {
+    await apiPatch(`/bee/turns/${btn.dataset.turnId}`, { result: null });
+    if (btn.dataset.spellerId) {
+      await apiPost(`/bee/spellers/${btn.dataset.spellerId}/reinstate`, {});
     }
-  }
-
-  if (action === 'eliminate') {
-    const spellerId = btn.dataset.spellerId;
-    try {
-      await apiPost(`/bee/spellers/${spellerId}/eliminate`, {});
-      showToast('Speller eliminated');
-      poller.forcePoll();
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
+    showToast('Undone');
+    poller.forcePoll();
+  } catch (err) {
+    showToast(err.message, 'error');
   }
 });
 
@@ -185,22 +199,6 @@ document.getElementById('import-words-btn').addEventListener('click', async () =
   }
 });
 
-// --- Finish Bee ---
-document.getElementById('finish-btn').addEventListener('click', async () => {
-  const winnerId = document.getElementById('winner-select').value;
-  if (!winnerId) return showToast('Select a winner', 'error');
-
-  if (!confirm('Are you sure? This will end the bee and compute payouts.')) return;
-
-  try {
-    const payoutResult = await apiPost('/bee/finish', { winnerId });
-    showPayoutReveal(payoutResult);
-    poller.forcePoll();
-  } catch (err) {
-    showToast(err.message, 'error');
-  }
-});
-
 // --- Poll & Render ---
 function render(data) {
   state = data;
@@ -236,7 +234,12 @@ function render(data) {
   const activeSpellers = spellers.filter(s => s.status === 'active');
   document.getElementById('active-speller-count').textContent = `${activeSpellers.length}/${spellers.length} active`;
 
-  document.getElementById('speller-list').innerHTML = spellers.map(s => {
+  const sortedSpellers = [...spellers].sort((a, b) => {
+    const order = { active: 0, winner: 1, eliminated: 2 };
+    return (order[a.status] || 0) - (order[b.status] || 0);
+  });
+
+  document.getElementById('speller-list').innerHTML = sortedSpellers.map(s => {
     const badge = s.status === 'active' ? '<span class="badge badge--active">Active</span>'
       : s.status === 'eliminated' ? `<span class="badge badge--eliminated">Out R${s.eliminated_in_round || '?'}</span>`
         : '<span class="badge badge--winner">Winner</span>';
@@ -256,23 +259,11 @@ function render(data) {
     </div>`;
   }).join('') || '<div class="empty-state">No spellers added</div>';
 
-  // Turn speller dropdown
-  const turnSpellerSelect = document.getElementById('turn-speller');
-  const currentVal = turnSpellerSelect.value;
-  turnSpellerSelect.innerHTML = '<option value="">Select speller...</option>' +
-    activeSpellers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
-  if (currentVal) turnSpellerSelect.value = currentVal;
-
-  // Winner dropdown
-  const winnerSelect = document.getElementById('winner-select');
-  const currentWinner = winnerSelect.value;
-  winnerSelect.innerHTML = '<option value="">Select winner...</option>' +
-    activeSpellers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
-  if (currentWinner) winnerSelect.value = currentWinner;
-
-  // Current word card (for pronouncer — shows the active turn's word details)
+  // --- Active round: pronouncer card + action buttons ---
   const turns = data.currentTurns || [];
   const activeTurn = turns.find(t => !t.result);
+
+  // Pronouncer card — only when there's an active turn with a word
   const wordCardEl = document.getElementById('current-word-card');
   if (activeTurn && activeTurn.word) {
     wordCardEl.style.display = '';
@@ -291,61 +282,97 @@ function render(data) {
     wordCardEl.style.display = 'none';
   }
 
-  // Upcoming spellers from round order
-  const upcomingEl = document.getElementById('upcoming-spellers');
-  if (activeRound && activeRound.speller_order) {
-    const spellerOrder = typeof activeRound.speller_order === 'string'
-      ? JSON.parse(activeRound.speller_order) : activeRound.speller_order;
+  // Compute upcoming spellers from room-level order, filtered to active + not yet gone this round
+  let upcoming = [];
+  if (activeRound && data.room.spellerOrder?.length) {
     const completedSpellerIds = new Set(turns.map(t => t.speller_id));
-    const upcoming = spellerOrder
+    // If there's an active turn, that speller is "current", not upcoming
+    if (activeTurn) completedSpellerIds.delete(activeTurn.speller_id);
+    upcoming = data.room.spellerOrder
       .filter(id => !completedSpellerIds.has(id))
       .map(id => spellers.find(s => s.id === id))
-      .filter(Boolean);
+      .filter(s => s && s.status === 'active');
+  }
 
-    if (upcoming.length > 0) {
-      upcomingEl.innerHTML = `
-        <div class="upcoming-lineup">
-          <div class="upcoming-label">Upcoming Spellers</div>
-          <div class="upcoming-list">
-            ${upcoming.map((s, i) => `
-              <div class="upcoming-item ${i === 0 ? 'upcoming-item--next' : ''}">
-                <span class="upcoming-order">${i + 1}</span>
-                <span class="upcoming-name">${esc(s.name)}</span>
-                ${i === 0 ? '<span class="badge badge--active" style="font-size:0.6rem">Next</span>' : ''}
-              </div>
-            `).join('')}
-          </div>
+  // Action buttons
+  const actionsEl = document.getElementById('bee-actions');
+  if (activeRound) {
+    if (activeTurn) {
+      // Active turn awaiting result — show Correct / Incorrect / Eliminate
+      actionsEl.innerHTML = `
+        <div class="bee-action-bar">
+          <button class="btn btn--green btn--lg" data-action="correct" data-turn-id="${activeTurn.id}">Correct</button>
+          <button class="btn btn--red btn--lg" data-action="incorrect" data-turn-id="${activeTurn.id}" data-speller-id="${activeTurn.speller_id}" data-speller-name="${esc(activeTurn.speller_name)}">Incorrect</button>
+        </div>
+        <div class="bee-action-bar mt-8">
+          <button class="btn btn--outline btn--sm" data-action="skip-word">Skip Word</button>
         </div>
       `;
-      // Auto-select next speller in dropdown
-      if (upcoming.length > 0 && !document.getElementById('turn-speller').value) {
-        document.getElementById('turn-speller').value = upcoming[0].id;
-      }
     } else {
-      upcomingEl.innerHTML = '';
+      // No active turn — show Call Next Speller / Skip buttons
+      const nextSpeller = upcoming[0];
+      if (nextSpeller) {
+        actionsEl.innerHTML = `
+          <div class="next-up-label">Next up: <strong>${esc(nextSpeller.name)}</strong></div>
+          <div class="bee-action-bar">
+            <button class="btn btn--gold btn--lg" data-action="call" data-speller-id="${nextSpeller.id}">Call Speller</button>
+          </div>
+          <div class="bee-action-bar mt-8">
+            <button class="btn btn--outline btn--sm" data-action="skip-word">Skip Word</button>
+            <button class="btn btn--outline btn--sm" data-action="skip-speller" data-speller-id="${nextSpeller.id}" data-speller-name="${esc(nextSpeller.name)}">Skip Speller</button>
+          </div>
+        `;
+      } else {
+        actionsEl.innerHTML = '<div class="empty-state">All spellers have gone this round</div>';
+      }
     }
+  } else {
+    actionsEl.innerHTML = '';
+  }
+
+  // Upcoming spellers list (excluding the current/next one who's shown in actions)
+  const upcomingEl = document.getElementById('upcoming-spellers');
+  const displayUpcoming = activeTurn ? upcoming.filter(s => s.id !== activeTurn.speller_id) : upcoming.slice(1);
+  if (displayUpcoming.length > 0) {
+    upcomingEl.innerHTML = `
+      <div class="upcoming-lineup">
+        <div class="upcoming-label">On Deck</div>
+        <div class="upcoming-list">
+          ${displayUpcoming.map((s, i) => `
+            <div class="upcoming-item">
+              <span class="upcoming-order">${i + 1}</span>
+              <span class="upcoming-name">${esc(s.name)}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
   } else {
     upcomingEl.innerHTML = '';
   }
 
-  // Current turns with action buttons
+  // Turn history — most recent completed turn gets an undo button
+  const completedTurns = turns.filter(t => t.result);
+  const mostRecentTurnId = completedTurns.length > 0 ? completedTurns[0].id : null;
+
   document.getElementById('current-turns').innerHTML = turns.length ? turns.map(t => {
-    const resultBtns = t.result ? (
-      t.result === 'correct'
-        ? '<span class="badge badge--correct">Correct</span>'
-        : `<span class="badge badge--incorrect">Incorrect</span>
-           <button class="btn btn--red btn--sm" data-turn-action="eliminate" data-speller-id="${t.speller_id}">Eliminate</button>`
-    ) : `
-      <button class="btn btn--green btn--sm" data-turn-action="correct" data-turn-id="${t.id}">✓</button>
-      <button class="btn btn--red btn--sm" data-turn-action="incorrect" data-turn-id="${t.id}">✗</button>
-    `;
+    const canUndo = t.id === mostRecentTurnId;
+    const undoBtn = canUndo
+      ? ` <button class="btn btn--outline btn--sm" data-action="undo" data-turn-id="${t.id}" data-speller-id="${t.speller_id}" style="font-size:0.65rem;padding:3px 8px">Undo</button>`
+      : '';
+
+    const resultBadge = t.result === 'correct'
+      ? `<span class="badge badge--correct">Correct</span>${undoBtn}`
+      : t.result === 'incorrect'
+        ? `<span class="badge badge--incorrect">Incorrect</span>${undoBtn}`
+        : '<span class="text-sm text-gray">Pending...</span>';
 
     return `<div class="flex-between" style="padding:8px 0;border-bottom:1px solid rgba(75,85,99,0.3)">
       <div>
         <strong>${esc(t.speller_name)}</strong>
         ${t.word ? `<span class="text-sm text-gray"> — "${esc(t.word)}"</span>` : ''}
       </div>
-      <div class="flex gap-8">${resultBtns}</div>
+      <div class="flex gap-8">${resultBadge}</div>
     </div>`;
   }).join('') : '<div class="empty-state text-sm">No turns yet</div>';
 
@@ -363,47 +390,6 @@ function render(data) {
       </div>
     </div>
   `).join('') : '<div class="empty-state">No gamblers yet</div>';
-
-  // Load next word if round is active
-  if (activeRound) {
-    loadNextWord();
-  }
-}
-
-async function loadNextWord() {
-  try {
-    const data = await apiGet('/bee/words/next');
-    const container = document.getElementById('next-word');
-    if (data.word) {
-      const w = data.word;
-      selectedWord = w.word;
-      container.innerHTML = `
-        <div class="word-card selected" data-word="${esc(w.word)}">
-          <div class="word-text">${esc(w.word)}${w.pronunciation ? ` <span class="text-sm text-gray" style="font-style:italic;font-weight:400">${esc(w.pronunciation)}</span>` : ''}</div>
-          <div class="word-def">${esc(w.definition)}</div>
-          ${w.sentence ? `<div class="word-def" style="margin-top:2px;font-style:italic">"${esc(w.sentence)}"</div>` : ''}
-          <div class="word-def" style="margin-top:2px">Origin: ${esc(w.origin)}</div>
-          <div class="flex-between mt-8">
-            <span class="text-sm text-gray">${data.remaining} words remaining</span>
-            <button class="btn btn--outline btn--sm" id="skip-word-btn">Skip</button>
-          </div>
-        </div>
-      `;
-      document.getElementById('skip-word-btn')?.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        try {
-          await apiPost('/bee/words/skip', {});
-          selectedWord = null;
-          loadNextWord();
-        } catch (err) {
-          showToast(err.message, 'error');
-        }
-      });
-    } else {
-      selectedWord = null;
-      container.innerHTML = '<div class="text-sm text-gray">No words remaining</div>';
-    }
-  } catch (e) { /* best effort */ }
 }
 
 function esc(str) {

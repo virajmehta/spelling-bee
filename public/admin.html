@@ -71,47 +71,28 @@
           </div>
 
           <div id="active-round" style="display:none">
-            <div class="mb-8">
+            <div class="mb-16">
               <div class="flex-between">
                 <div id="round-label" class="text-gold"></div>
                 <button class="btn btn--outline btn--sm" id="complete-round-btn">End Round</button>
               </div>
             </div>
 
-            <!-- Current Word Card (for pronouncer) -->
+            <!-- Current Word Card (for pronouncer — only shown during active turn) -->
             <div id="current-word-card" style="display:none" class="mb-16"></div>
+
+            <!-- Action buttons -->
+            <div id="bee-actions" class="mb-16"></div>
 
             <!-- Upcoming Spellers -->
             <div id="upcoming-spellers" class="mb-16"></div>
 
-            <!-- Turn creation -->
-            <div class="mb-16">
-              <label>Next Speller</label>
-              <select id="turn-speller" class="mb-8"></select>
-
-              <label>Word</label>
-              <div id="next-word" class="mb-8"></div>
-              <input type="text" id="custom-word" placeholder="Or type a custom word" class="mb-8">
-
-              <button class="btn btn--gold btn--block" id="create-turn-btn">Call Speller</button>
-            </div>
-
-            <!-- Current turns -->
+            <!-- Turn history -->
             <div>
-              <h3 class="text-gold mb-8">Current Turns</h3>
+              <h3 class="text-gold mb-8">Turn History</h3>
               <div id="current-turns"></div>
             </div>
           </div>
-        </div>
-
-        <!-- Finish Bee -->
-        <div class="card">
-          <div class="card-header"><h2>Finish Bee</h2></div>
-          <div class="form-group">
-            <label>Declare Winner</label>
-            <select id="winner-select"></select>
-          </div>
-          <button class="btn btn--red btn--block" id="finish-btn">Declare Winner & Finish</button>
         </div>
 
         <!-- Word Import -->

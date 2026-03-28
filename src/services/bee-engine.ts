@@ -33,28 +33,75 @@ export async function startRound(
     .first<{ max_num: number | null }>();
   const roundNumber = (last?.max_num || 0) + 1;
 
-  // Get active spellers and shuffle them for this round
-  const spellers = await db
-    .prepare("SELECT id FROM spellers WHERE room_id = ? AND status = 'active' ORDER BY display_order")
+  // Check if room already has a speller order; if not, shuffle and save it
+  const room = await db
+    .prepare('SELECT speller_order FROM rooms WHERE id = ?')
     .bind(roomId)
-    .all<{ id: string }>();
-  const spellerIds = spellers.results.map(s => s.id);
-  // Fisher-Yates shuffle
-  for (let i = spellerIds.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [spellerIds[i], spellerIds[j]] = [spellerIds[j], spellerIds[i]];
+    .first<{ speller_order: string }>();
+  let spellerOrder: string[] = [];
+  try { spellerOrder = JSON.parse(room?.speller_order || '[]'); } catch {}
+
+  if (spellerOrder.length === 0) {
+    // First round — shuffle all active spellers and lock in the order
+    const spellers = await db
+      .prepare("SELECT id FROM spellers WHERE room_id = ? AND status = 'active' ORDER BY display_order")
+      .bind(roomId)
+      .all<{ id: string }>();
+    spellerOrder = spellers.results.map(s => s.id);
+    // Fisher-Yates shuffle
+    for (let i = spellerOrder.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [spellerOrder[i], spellerOrder[j]] = [spellerOrder[j], spellerOrder[i]];
+    }
   }
 
   const id = crypto.randomUUID();
   await db.batch([
     db.prepare('INSERT INTO rounds (id, room_id, round_number, difficulty_tier, status, speller_order) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(id, roomId, roundNumber, 1, 'active', JSON.stringify(spellerIds)),
-    // Lock betting and set room to active
-    db.prepare("UPDATE rooms SET current_round_id = ?, betting_open = 0, status = 'active', version = version + 1 WHERE id = ?")
-      .bind(id, roomId),
+      .bind(id, roomId, roundNumber, 1, 'active', JSON.stringify(spellerOrder)),
+    // Lock betting, set room to active, save speller order on room
+    db.prepare("UPDATE rooms SET current_round_id = ?, betting_open = 0, status = 'active', speller_order = ?, version = version + 1 WHERE id = ?")
+      .bind(id, JSON.stringify(spellerOrder), roomId),
   ]);
 
   return { id, roundNumber };
+}
+
+export async function checkRoundComplete(db: D1Database, roomId: string): Promise<boolean> {
+  const room = await db
+    .prepare("SELECT current_round_id, speller_order FROM rooms WHERE id = ?")
+    .bind(roomId)
+    .first<{ current_round_id: string | null; speller_order: string }>();
+  if (!room?.current_round_id) return false;
+
+  let spellerOrder: string[] = [];
+  try { spellerOrder = JSON.parse(room.speller_order || '[]'); } catch {}
+  if (spellerOrder.length === 0) return false;
+
+  // Get active speller IDs
+  const activeSpellers = await db
+    .prepare("SELECT id FROM spellers WHERE room_id = ? AND status = 'active'")
+    .bind(roomId)
+    .all<{ id: string }>();
+  const activeIds = new Set(activeSpellers.results.map(s => s.id));
+
+  // Active spellers in the round order
+  const activeInOrder = spellerOrder.filter(id => activeIds.has(id));
+
+  // Get all turns with results in this round
+  const turns = await db
+    .prepare("SELECT speller_id FROM turns WHERE round_id = ? AND result IS NOT NULL")
+    .bind(room.current_round_id)
+    .all<{ speller_id: string }>();
+  const completedSpellerIds = new Set(turns.results.map(t => t.speller_id));
+
+  // Check if every active speller in the order has a completed turn
+  const allDone = activeInOrder.every(id => completedSpellerIds.has(id));
+  if (!allDone) return false;
+
+  // Auto-complete the round
+  await completeRound(db, roomId, room.current_round_id);
+  return true;
 }
 
 export async function completeRound(db: D1Database, roomId: string, roundId: string) {
@@ -91,7 +138,7 @@ export async function createTurn(
 export async function recordTurnResult(
   db: D1Database,
   turnId: string,
-  result: 'correct' | 'incorrect'
+  result: 'correct' | 'incorrect' | null
 ) {
   await db
     .prepare('UPDATE turns SET result = ? WHERE id = ?')

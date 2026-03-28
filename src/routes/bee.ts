@@ -50,17 +50,28 @@ bee.post('/turns', requireRole('admin'), async (c) => {
   return c.json({ id: turnId });
 });
 
-// Record turn result (admin only)
+// Record or undo turn result (admin only)
 bee.patch('/turns/:id', requireRole('admin'), async (c) => {
   const turnId = c.req.param('id')!;
-  const { result } = await c.req.json<{ result: 'correct' | 'incorrect' }>();
+  const { result } = await c.req.json<{ result: 'correct' | 'incorrect' | null }>();
 
-  if (!['correct', 'incorrect'].includes(result)) {
-    return c.json({ error: 'result must be correct or incorrect' }, 400);
+  if (result !== null && !['correct', 'incorrect'].includes(result)) {
+    return c.json({ error: 'result must be correct, incorrect, or null' }, 400);
   }
 
   await engine.recordTurnResult(c.env.DB, turnId, result);
-  await engine.bumpVersion(c.env.DB, c.get('roomId'));
+
+  const roomId = c.get('roomId');
+
+  // Auto-complete round if all active spellers have gone
+  if (result !== null) {
+    const roundCompleted = await engine.checkRoundComplete(c.env.DB, roomId);
+    if (roundCompleted) {
+      return c.json({ success: true, roundCompleted: true });
+    }
+  }
+
+  await engine.bumpVersion(c.env.DB, roomId);
   return c.json({ success: true });
 });
 
