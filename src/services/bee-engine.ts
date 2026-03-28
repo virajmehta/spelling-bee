@@ -17,8 +17,7 @@ export async function bumpVersion(db: D1Database, roomId: string) {
 
 export async function startRound(
   db: D1Database,
-  roomId: string,
-  difficultyTier: number
+  roomId: string
 ): Promise<{ id: string; roundNumber: number }> {
   // Verify no active round
   const active = await db
@@ -34,10 +33,22 @@ export async function startRound(
     .first<{ max_num: number | null }>();
   const roundNumber = (last?.max_num || 0) + 1;
 
+  // Get active spellers and shuffle them for this round
+  const spellers = await db
+    .prepare("SELECT id FROM spellers WHERE room_id = ? AND status = 'active' ORDER BY display_order")
+    .bind(roomId)
+    .all<{ id: string }>();
+  const spellerIds = spellers.results.map(s => s.id);
+  // Fisher-Yates shuffle
+  for (let i = spellerIds.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [spellerIds[i], spellerIds[j]] = [spellerIds[j], spellerIds[i]];
+  }
+
   const id = crypto.randomUUID();
   await db.batch([
-    db.prepare('INSERT INTO rounds (id, room_id, round_number, difficulty_tier, status) VALUES (?, ?, ?, ?, ?)')
-      .bind(id, roomId, roundNumber, difficultyTier, 'active'),
+    db.prepare('INSERT INTO rounds (id, room_id, round_number, difficulty_tier, status, speller_order) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(id, roomId, roundNumber, 1, 'active', JSON.stringify(spellerIds)),
     // Lock betting and set room to active
     db.prepare("UPDATE rooms SET current_round_id = ?, betting_open = 0, status = 'active', version = version + 1 WHERE id = ?")
       .bind(id, roomId),

@@ -113,26 +113,23 @@ admin.post('/credits/all', async (c) => {
 // Import words from built-in word list
 admin.post('/words/import', async (c) => {
   const roomId = c.get('roomId');
-  const words = wordsData as Record<string, { word: string; definition: string; origin: string }[]>;
+  const words = wordsData as { word: string; definition: string; origin: string; pronunciation: string; sentence: string }[];
 
   const stmts: D1PreparedStatement[] = [];
-  let sortOrder = 0;
 
-  for (const [tier, wordList] of Object.entries(words)) {
-    for (const w of wordList) {
-      sortOrder++;
-      stmts.push(
-        c.env.DB.prepare(
-          'INSERT INTO words (id, room_id, word, definition, origin, difficulty_tier, used, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-        ).bind(crypto.randomUUID(), roomId, w.word, w.definition, w.origin, parseInt(tier), 0, sortOrder)
-      );
-    }
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    stmts.push(
+      c.env.DB.prepare(
+        'INSERT INTO words (id, room_id, word, definition, origin, pronunciation, sentence, difficulty_tier, used, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(crypto.randomUUID(), roomId, w.word, w.definition, w.origin, w.pronunciation || '', w.sentence || '', 1, 0, i + 1)
+    );
   }
 
   stmts.push(c.env.DB.prepare('UPDATE rooms SET version = version + 1 WHERE id = ?').bind(roomId));
   await c.env.DB.batch(stmts);
 
-  return c.json({ imported: sortOrder });
+  return c.json({ imported: words.length });
 });
 
 // Get all gamblers (for chip crediting)

@@ -9,10 +9,9 @@ const bee = new Hono<Env>();
 // Start new round (admin only)
 bee.post('/rounds', requireRole('admin'), async (c) => {
   const roomId = c.get('roomId');
-  const { difficultyTier } = await c.req.json<{ difficultyTier: number }>();
 
   try {
-    const round = await engine.startRound(c.env.DB, roomId, difficultyTier || 1);
+    const round = await engine.startRound(c.env.DB, roomId);
     return c.json(round);
   } catch (e: any) {
     return c.json({ error: e.message }, 409);
@@ -95,18 +94,36 @@ bee.post('/finish', requireRole('admin'), async (c) => {
   return c.json(payoutResult);
 });
 
-// Get unused words for current tier (admin only)
-bee.get('/words', requireRole('admin'), async (c) => {
+// Get next unused word in order (admin only)
+bee.get('/words/next', requireRole('admin'), async (c) => {
   const roomId = c.get('roomId');
-  const tier = parseInt(c.req.query('tier') || '1');
 
-  const words = await c.env.DB.prepare(
-    'SELECT id, word, definition, origin, difficulty_tier FROM words WHERE room_id = ? AND difficulty_tier = ? AND used = 0 ORDER BY sort_order'
+  const word = await c.env.DB.prepare(
+    'SELECT id, word, definition, origin, pronunciation, sentence, sort_order FROM words WHERE room_id = ? AND used = 0 ORDER BY sort_order LIMIT 1'
   )
-    .bind(roomId, tier)
-    .all();
+    .bind(roomId)
+    .first();
 
-  return c.json({ words: words.results });
+  const remaining = await c.env.DB.prepare(
+    'SELECT COUNT(*) as count FROM words WHERE room_id = ? AND used = 0'
+  ).bind(roomId).first<{ count: number }>();
+
+  return c.json({ word: word || null, remaining: remaining?.count || 0 });
+});
+
+// Skip current word (mark as used without assigning to a turn)
+bee.post('/words/skip', requireRole('admin'), async (c) => {
+  const roomId = c.get('roomId');
+
+  const word = await c.env.DB.prepare(
+    'SELECT id FROM words WHERE room_id = ? AND used = 0 ORDER BY sort_order LIMIT 1'
+  ).bind(roomId).first<{ id: string }>();
+
+  if (!word) return c.json({ error: 'No words remaining' }, 404);
+
+  await c.env.DB.prepare('UPDATE words SET used = 1 WHERE id = ?').bind(word.id).run();
+
+  return c.json({ skipped: true });
 });
 
 export default bee;

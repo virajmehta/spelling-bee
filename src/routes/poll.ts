@@ -31,7 +31,7 @@ poll.get('/', async (c) => {
     ).bind(roomId).all<Speller>(),
 
     c.env.DB.prepare(
-      'SELECT id, round_number, difficulty_tier, status FROM rounds WHERE room_id = ? ORDER BY round_number DESC LIMIT 5'
+      'SELECT id, round_number, difficulty_tier, status, speller_order FROM rounds WHERE room_id = ? ORDER BY round_number DESC LIMIT 5'
     ).bind(roomId).all(),
 
     c.env.DB.prepare(
@@ -40,8 +40,14 @@ poll.get('/', async (c) => {
 
     room.current_round_id
       ? c.env.DB.prepare(
-          'SELECT t.id, t.speller_id, t.word, t.result, t.turn_order, s.name as speller_name FROM turns t JOIN spellers s ON t.speller_id = s.id WHERE t.round_id = ? ORDER BY t.turn_order DESC LIMIT 10'
-        ).bind(room.current_round_id).all()
+          `SELECT t.id, t.speller_id, t.word, t.result, t.turn_order, s.name as speller_name,
+                  w.definition as word_definition, w.pronunciation as word_pronunciation,
+                  w.sentence as word_sentence, w.origin as word_origin
+           FROM turns t
+           JOIN spellers s ON t.speller_id = s.id
+           LEFT JOIN words w ON w.room_id = ? AND w.word = t.word
+           WHERE t.round_id = ? ORDER BY t.turn_order DESC LIMIT 10`
+        ).bind(roomId, room.current_round_id).all()
       : Promise.resolve({ results: [] }),
   ]);
 

@@ -14,6 +14,15 @@ let selectedWord = null;
 
 document.getElementById('room-info').textContent = `${auth.roomName || 'Room'} — ${auth.displayName}`;
 
+// --- Tab switching ---
+document.getElementById('admin-tabs').addEventListener('click', (e) => {
+  const tab = e.target.closest('.admin-tab');
+  if (!tab) return;
+  const tabName = tab.dataset.tab;
+  document.querySelectorAll('.admin-tab').forEach(t => t.classList.toggle('active', t === tab));
+  document.querySelectorAll('.admin-tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tabName}`));
+});
+
 document.getElementById('logout-btn').addEventListener('click', () => {
   clearAuth();
   window.location.href = '/';
@@ -38,9 +47,8 @@ document.getElementById('add-spellers-btn').addEventListener('click', async () =
 
 // --- Round Controls ---
 document.getElementById('start-round-btn').addEventListener('click', async () => {
-  const tier = parseInt(document.getElementById('difficulty-tier').value);
   try {
-    const res = await apiPost('/bee/rounds', { difficultyTier: tier });
+    const res = await apiPost('/bee/rounds', {});
     currentRoundId = res.id;
     showToast(`Round ${res.roundNumber} started — Bets Locked`);
     poller.forcePoll();
@@ -74,6 +82,7 @@ document.getElementById('create-turn-btn').addEventListener('click', async () =>
     document.getElementById('custom-word').value = '';
     selectedWord = null;
     showToast('Turn created');
+    loadNextWord();
     poller.forcePoll();
   } catch (err) {
     showToast(err.message, 'error');
@@ -209,7 +218,7 @@ function render(data) {
     document.getElementById('no-round-msg').style.display = 'none';
     document.getElementById('round-controls').style.display = 'none';
     document.getElementById('active-round').style.display = '';
-    document.getElementById('round-label').textContent = `Round ${activeRound.round_number} — Tier ${activeRound.difficulty_tier}`;
+    document.getElementById('round-label').textContent = `Round ${activeRound.round_number}`;
     document.getElementById('round-status').textContent = 'ACTIVE';
     document.getElementById('round-status').style.background = 'var(--green)';
     document.getElementById('round-status').style.color = '#000';
@@ -261,8 +270,65 @@ function render(data) {
     activeSpellers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
   if (currentWinner) winnerSelect.value = currentWinner;
 
-  // Current turns with action buttons
+  // Current word card (for pronouncer — shows the active turn's word details)
   const turns = data.currentTurns || [];
+  const activeTurn = turns.find(t => !t.result);
+  const wordCardEl = document.getElementById('current-word-card');
+  if (activeTurn && activeTurn.word) {
+    wordCardEl.style.display = '';
+    wordCardEl.innerHTML = `
+      <div class="pronouncer-card">
+        <div class="pronouncer-label">Now Spelling</div>
+        <div class="pronouncer-speller">${esc(activeTurn.speller_name)}</div>
+        <div class="pronouncer-word">${esc(activeTurn.word)}</div>
+        ${activeTurn.word_pronunciation ? `<div class="pronouncer-pronunciation">${esc(activeTurn.word_pronunciation)}</div>` : ''}
+        ${activeTurn.word_definition ? `<div class="pronouncer-detail"><span class="pronouncer-detail-label">Definition:</span> ${esc(activeTurn.word_definition)}</div>` : ''}
+        ${activeTurn.word_sentence ? `<div class="pronouncer-detail"><span class="pronouncer-detail-label">Sentence:</span> ${esc(activeTurn.word_sentence)}</div>` : ''}
+        ${activeTurn.word_origin ? `<div class="pronouncer-detail"><span class="pronouncer-detail-label">Origin:</span> ${esc(activeTurn.word_origin)}</div>` : ''}
+      </div>
+    `;
+  } else {
+    wordCardEl.style.display = 'none';
+  }
+
+  // Upcoming spellers from round order
+  const upcomingEl = document.getElementById('upcoming-spellers');
+  if (activeRound && activeRound.speller_order) {
+    const spellerOrder = typeof activeRound.speller_order === 'string'
+      ? JSON.parse(activeRound.speller_order) : activeRound.speller_order;
+    const completedSpellerIds = new Set(turns.map(t => t.speller_id));
+    const upcoming = spellerOrder
+      .filter(id => !completedSpellerIds.has(id))
+      .map(id => spellers.find(s => s.id === id))
+      .filter(Boolean);
+
+    if (upcoming.length > 0) {
+      upcomingEl.innerHTML = `
+        <div class="upcoming-lineup">
+          <div class="upcoming-label">Upcoming Spellers</div>
+          <div class="upcoming-list">
+            ${upcoming.map((s, i) => `
+              <div class="upcoming-item ${i === 0 ? 'upcoming-item--next' : ''}">
+                <span class="upcoming-order">${i + 1}</span>
+                <span class="upcoming-name">${esc(s.name)}</span>
+                ${i === 0 ? '<span class="badge badge--active" style="font-size:0.6rem">Next</span>' : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+      // Auto-select next speller in dropdown
+      if (upcoming.length > 0 && !document.getElementById('turn-speller').value) {
+        document.getElementById('turn-speller').value = upcoming[0].id;
+      }
+    } else {
+      upcomingEl.innerHTML = '';
+    }
+  } else {
+    upcomingEl.innerHTML = '';
+  }
+
+  // Current turns with action buttons
   document.getElementById('current-turns').innerHTML = turns.length ? turns.map(t => {
     const resultBtns = t.result ? (
       t.result === 'correct'
@@ -298,32 +364,46 @@ function render(data) {
     </div>
   `).join('') : '<div class="empty-state">No gamblers yet</div>';
 
-  // Load words if round is active
+  // Load next word if round is active
   if (activeRound) {
-    loadWords(activeRound.difficulty_tier);
+    loadNextWord();
   }
 }
 
-async function loadWords(tier) {
+async function loadNextWord() {
   try {
-    const data = await apiGet(`/bee/words?tier=${tier}`);
-    const container = document.getElementById('word-list');
-    container.innerHTML = (data.words || []).map(w => `
-      <div class="word-card" data-word="${esc(w.word)}">
-        <div class="word-text">${esc(w.word)}</div>
-        <div class="word-def">${esc(w.definition)} (${esc(w.origin)})</div>
-      </div>
-    `).join('') || '<div class="text-sm text-gray">No words available for this tier</div>';
-
-    container.querySelectorAll('.word-card').forEach(card => {
-      card.addEventListener('click', () => {
-        container.querySelectorAll('.word-card').forEach(c => c.classList.remove('selected'));
-        card.classList.add('selected');
-        selectedWord = card.dataset.word;
-        document.getElementById('custom-word').value = '';
+    const data = await apiGet('/bee/words/next');
+    const container = document.getElementById('next-word');
+    if (data.word) {
+      const w = data.word;
+      selectedWord = w.word;
+      container.innerHTML = `
+        <div class="word-card selected" data-word="${esc(w.word)}">
+          <div class="word-text">${esc(w.word)}${w.pronunciation ? ` <span class="text-sm text-gray" style="font-style:italic;font-weight:400">${esc(w.pronunciation)}</span>` : ''}</div>
+          <div class="word-def">${esc(w.definition)}</div>
+          ${w.sentence ? `<div class="word-def" style="margin-top:2px;font-style:italic">"${esc(w.sentence)}"</div>` : ''}
+          <div class="word-def" style="margin-top:2px">Origin: ${esc(w.origin)}</div>
+          <div class="flex-between mt-8">
+            <span class="text-sm text-gray">${data.remaining} words remaining</span>
+            <button class="btn btn--outline btn--sm" id="skip-word-btn">Skip</button>
+          </div>
+        </div>
+      `;
+      document.getElementById('skip-word-btn')?.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          await apiPost('/bee/words/skip', {});
+          selectedWord = null;
+          loadNextWord();
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
       });
-    });
-  } catch (e) { /* words load is best effort */ }
+    } else {
+      selectedWord = null;
+      container.innerHTML = '<div class="text-sm text-gray">No words remaining</div>';
+    }
+  } catch (e) { /* best effort */ }
 }
 
 function esc(str) {

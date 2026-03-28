@@ -101,6 +101,41 @@ function render(data) {
     liveTurnEl.style.display = 'none';
   }
 
+  // Upcoming spellers (during active round)
+  const upcomingEl = document.getElementById('upcoming-spellers');
+  const activeRound = data.rounds?.find(r => r.status === 'active');
+  if (activeRound && activeRound.speller_order && !data.room.bettingOpen) {
+    const spellerOrder = typeof activeRound.speller_order === 'string'
+      ? JSON.parse(activeRound.speller_order) : activeRound.speller_order;
+    const completedSpellerIds = new Set(turns.map(t => t.speller_id));
+    const allSpellers = data.spellers || [];
+    const upcoming = spellerOrder
+      .filter(id => !completedSpellerIds.has(id))
+      .map(id => allSpellers.find(s => s.id === id))
+      .filter(Boolean);
+
+    if (upcoming.length > 0) {
+      upcomingEl.style.display = '';
+      upcomingEl.innerHTML = `
+        <div class="card" style="border-left:3px solid var(--blue)">
+          <div class="card-header"><h2>Up Next</h2></div>
+          ${upcoming.slice(0, 6).map((s, i) => `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 0;${i > 0 ? 'border-top:1px solid rgba(51,65,85,0.25);' : ''}">
+              <span class="text-sm text-gray" style="font-family:var(--font-mono);width:22px;text-align:center">${i + 1}</span>
+              <span style="font-weight:${i === 0 ? '700' : '500'};${i === 0 ? 'color:var(--gold)' : ''}">${esc(s.name)}</span>
+              ${i === 0 ? '<span class="badge badge--active" style="font-size:0.6rem">Next</span>' : ''}
+            </div>
+          `).join('')}
+          ${upcoming.length > 6 ? `<div class="text-sm text-gray mt-8">+${upcoming.length - 6} more</div>` : ''}
+        </div>
+      `;
+    } else {
+      upcomingEl.style.display = 'none';
+    }
+  } else {
+    upcomingEl.style.display = 'none';
+  }
+
   // Bet speller dropdown
   const activeSpellers = (data.spellers || []).filter(s => s.status === 'active');
   const betSelect = document.getElementById('bet-speller');
