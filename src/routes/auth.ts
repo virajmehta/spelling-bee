@@ -65,7 +65,7 @@ auth.post('/join', async (c) => {
       room: room.id,
       role: userRole as 'admin' | 'gambler' | 'observer',
       name: displayName,
-      exp: Math.floor(Date.now() / 1000) + 3 * 60 * 60, // 3 hours
+      exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24 hours
     },
     c.env.JWT_SECRET
   );

@@ -2,10 +2,10 @@ import { requireAuth, clearAuth } from '/js/auth.js';
 import { apiPost } from '/js/api.js';
 import { Poller } from '/js/poll.js';
 import {
-  showToast, renderStatusBar, renderOddsTable,
+  showToast, renderStatusBar,
   renderSpellerList, renderMyBets
 } from '/js/components.js';
-import { formatChips } from '/js/format.js';
+import { formatChips, formatOdds, formatPayout } from '/js/format.js';
 import { showPayoutReveal } from '/js/animations.js';
 
 const auth = requireAuth('gambler');
@@ -93,7 +93,6 @@ function render(data) {
       <div class="live-turn">
         <div class="text-sm text-gray">Now Spelling</div>
         <div class="speller">${esc(latest.speller_name)}</div>
-        ${latest.word ? `<div class="word">"${esc(latest.word)}"</div>` : ''}
         ${latest.result ? `<span class="badge badge--${latest.result}">${latest.result}</span>` : '<span class="text-sm text-gray">Awaiting result...</span>'}
       </div>
     `;
@@ -146,8 +145,65 @@ function render(data) {
     }).join('');
   if (currentVal) betSelect.value = currentVal;
 
-  // Odds
-  document.getElementById('odds-board').innerHTML = renderOddsTable(data.odds, data.totalPool);
+  // Odds board — includes eliminated spellers grayed out with lost bets
+  const allSpellers = data.spellers || [];
+  const oddsMap = {};
+  (data.odds || []).forEach(o => { oddsMap[o.spellerId] = o; });
+  const myBetsBySpeller = {};
+  (data.myBets || []).forEach(b => {
+    if (!myBetsBySpeller[b.speller_id]) myBetsBySpeller[b.speller_id] = [];
+    myBetsBySpeller[b.speller_id].push(b);
+  });
+
+  // Active spellers first (sorted by pool), then eliminated
+  const activeOdds = (data.odds || []).map(o => {
+    const s = allSpellers.find(sp => sp.id === o.spellerId);
+    return { ...o, speller: s, eliminated: false };
+  });
+  const eliminatedSpellers = allSpellers
+    .filter(s => s.status === 'eliminated')
+    .map(s => ({ spellerId: s.id, spellerName: s.name, speller: s, eliminated: true }));
+
+  const allRows = [...activeOdds, ...eliminatedSpellers];
+
+  if (allRows.length === 0) {
+    document.getElementById('odds-board').innerHTML = '<div class="empty-state">No spellers yet</div>';
+  } else {
+    const rows = allRows.map(o => {
+      const bets = myBetsBySpeller[o.spellerId] || [];
+      const myTotal = bets.reduce((sum, b) => sum + b.amount, 0);
+      const lostBets = bets.filter(b => b.status === 'lost');
+      const lostTotal = lostBets.reduce((sum, b) => sum + b.amount, 0);
+
+      if (o.eliminated) {
+        return `<tr class="eliminated">
+          <td class="speller-name">${esc(o.spellerName)}</td>
+          <td class="mono text-gray">—</td>
+          <td class="mono text-gray">—</td>
+          <td class="mono">${myTotal > 0 ? `<span class="text-red">-${formatChips(lostTotal)}</span>` : '—'}</td>
+        </tr>`;
+      }
+
+      return `<tr>
+        <td class="speller-name">${esc(o.spellerName)}</td>
+        <td class="mono text-gold">${formatOdds(o.impliedOdds)}</td>
+        <td class="mono">${formatPayout(o.payoutPerChip)}</td>
+        <td class="mono">${myTotal > 0 ? formatChips(myTotal) : '—'}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('odds-board').innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Speller</th><th>Odds</th><th>Payout</th><th>My Bets</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="text-sm text-gray mt-8">Total Pool: <span class="mono text-gold">${formatChips(data.totalPool)}</span> chips</div>
+    `;
+  }
 
   // My Bets
   const myBets = data.myBets || [];
@@ -167,7 +223,6 @@ function render(data) {
           <div style="width:20px;text-align:center;font-size:1rem">${icon}</div>
           <div style="flex:1">
             <strong>${esc(a.speller_name)}</strong>${eliminated}
-            ${a.word ? `<span class="text-sm text-gray"> — "${esc(a.word)}"</span>` : ''}
           </div>
           <div class="text-sm text-gray">R${a.round_number}</div>
         </div>`;
