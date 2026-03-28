@@ -36,8 +36,28 @@ public/
   js/                   # Client-side modules (auth, api, polling, rendering)
   css/                  # Styles (theme tokens, components, page-specific)
 migrations/             # D1 schema migrations
-words/words.json        # Word list by difficulty tier (1-5)
+words/words.json        # Default word list (bundled at build time)
 ```
+
+## Word List JSON Format
+
+Word lists (both `words/words.json` and uploaded via admin UI) use this format:
+
+```json
+[
+  {
+    "word": "example",
+    "definition": "A thing characteristic of its kind",
+    "pronunciation": "ig-ZAM-pul",
+    "sentence": "She set a good example for her peers.",
+    "origin": "Latin"
+  }
+]
+```
+
+- `word` and `definition` are **required**
+- `pronunciation`, `sentence`, `origin` are optional (default to empty string)
+- Admin can upload custom word lists via `POST /admin/words/upload` — this replaces all unused words while preserving already-used ones
 
 ## Dev Commands
 

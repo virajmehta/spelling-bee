@@ -99,6 +99,13 @@
         <div class="card">
           <div class="card-header"><h2>Words</h2></div>
           <button class="btn btn--outline btn--block" id="import-words-btn">Import Default Word List</button>
+          <div class="mt-12">
+            <label class="text-sm text-gray" for="word-file-input">Or upload a custom word list (.json)</label>
+            <div class="flex gap-8 mt-4" style="align-items:center">
+              <input type="file" id="word-file-input" accept=".json" style="flex:1;font-size:0.85rem">
+              <button class="btn btn--gold btn--sm" id="upload-words-btn">Upload</button>
+            </div>
+          </div>
           <div id="import-status" class="text-sm text-gray mt-8"></div>
         </div>
 

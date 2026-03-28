@@ -199,6 +199,29 @@ document.getElementById('import-words-btn').addEventListener('click', async () =
   }
 });
 
+// --- Word Upload ---
+document.getElementById('upload-words-btn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('word-file-input');
+  const file = fileInput.files?.[0];
+  if (!file) return showToast('Select a .json file first', 'error');
+
+  try {
+    const text = await file.text();
+    const words = JSON.parse(text);
+    if (!Array.isArray(words)) throw new Error('File must contain a JSON array');
+    for (const w of words) {
+      if (!w.word || !w.definition) throw new Error('Each entry needs "word" and "definition"');
+    }
+    const res = await apiPost('/admin/words/upload', words);
+    document.getElementById('import-status').textContent = `Uploaded ${res.imported} words (replaced ${res.replaced} unused)`;
+    showToast(`Uploaded ${res.imported} words`);
+    fileInput.value = '';
+    poller.forcePoll();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
 // --- Poll & Render ---
 function render(data) {
   state = data;

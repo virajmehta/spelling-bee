@@ -132,6 +132,59 @@ admin.post('/words/import', async (c) => {
   return c.json({ imported: words.length });
 });
 
+// Upload custom word list (replaces unused words)
+admin.post('/words/upload', async (c) => {
+  const roomId = c.get('roomId');
+  const body = await c.req.json();
+
+  if (!Array.isArray(body)) {
+    return c.json({ error: 'Payload must be an array of word objects' }, 400);
+  }
+  for (const entry of body) {
+    if (!entry.word || !entry.definition) {
+      return c.json({ error: 'Each entry must have "word" and "definition"' }, 400);
+    }
+  }
+
+  // Count unused words that will be replaced
+  const unusedCount = await c.env.DB.prepare(
+    'SELECT COUNT(*) as cnt FROM words WHERE room_id = ? AND used = 0'
+  ).bind(roomId).first<{ cnt: number }>();
+  const replaced = unusedCount?.cnt || 0;
+
+  // Find max sort_order among remaining (used) words
+  const maxOrder = await c.env.DB.prepare(
+    'SELECT COALESCE(MAX(sort_order), 0) as max_order FROM words WHERE room_id = ? AND used = 1'
+  ).bind(roomId).first<{ max_order: number }>();
+  const startOrder = (maxOrder?.max_order || 0) + 1;
+
+  const stmts: D1PreparedStatement[] = [];
+
+  // Delete all unused words
+  stmts.push(
+    c.env.DB.prepare('DELETE FROM words WHERE room_id = ? AND used = 0').bind(roomId)
+  );
+
+  // Insert new words
+  for (let i = 0; i < body.length; i++) {
+    const w = body[i];
+    stmts.push(
+      c.env.DB.prepare(
+        'INSERT INTO words (id, room_id, word, definition, origin, pronunciation, sentence, difficulty_tier, used, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(
+        crypto.randomUUID(), roomId, w.word, w.definition,
+        w.origin || '', w.pronunciation || '', w.sentence || '',
+        1, 0, startOrder + i
+      )
+    );
+  }
+
+  stmts.push(c.env.DB.prepare('UPDATE rooms SET version = version + 1 WHERE id = ?').bind(roomId));
+  await c.env.DB.batch(stmts);
+
+  return c.json({ imported: body.length, replaced });
+});
+
 // Get all gamblers (for chip crediting)
 admin.get('/gamblers', async (c) => {
   const roomId = c.get('roomId');
