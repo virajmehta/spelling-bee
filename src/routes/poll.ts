@@ -46,28 +46,15 @@ poll.get('/', async (c) => {
   ]);
 
   const spellers = spellersResult.results;
-  const activeSpellerIds = spellers.filter(s => s.status === 'active' || s.status === 'winner').map(s => s.id);
+  const activeSpellers = spellers
+    .filter(s => s.status === 'active' || s.status === 'winner')
+    .map(s => ({ id: s.id, name: s.name }));
 
   // Calculate odds
   const { totalPool, odds } = calculateOdds(
     betsResult.results as any,
-    activeSpellerIds
+    activeSpellers
   );
-
-  // Ensure all active spellers appear in odds (even with 0 bets)
-  for (const s of spellers) {
-    if ((s.status === 'active' || s.status === 'winner') && !odds.find(o => o.spellerId === s.id)) {
-      odds.push({
-        spellerId: s.id,
-        spellerName: s.name,
-        poolOnSpeller: 0,
-        totalPool,
-        payoutPerChip: 0,
-        impliedOdds: 'N/A',
-        percentage: 0,
-      });
-    }
-  }
 
   const response: any = {
     room: {

@@ -4,8 +4,12 @@ compatibility_date = "2025-01-01"
 
 assets = { directory = "public" }
 
+routes = [
+  { pattern = "northbrooklynregionalspellingbee.com", custom_domain = true },
+]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "spelling-bee-db"
-database_id = "local"
+database_id = "bc7746ec-0029-44a5-b94a-044077fff57d"
 migrations_dir = "migrations"

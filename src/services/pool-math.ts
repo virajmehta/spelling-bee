@@ -20,15 +20,15 @@ export interface PortfolioItem {
 
 export function calculateOdds(
   bets: { speller_id: string; speller_name: string; amount: number; status: string }[],
-  activeSpellerIds: string[]
+  activeSpellers: { id: string; name: string }[]
 ): { totalPool: number; odds: OddsInfo[] } {
   // Total pool includes ALL bets (even on eliminated spellers = dead money)
   const totalPool = bets.reduce((sum, b) => sum + b.amount, 0);
 
   // Pool per active speller
   const poolBySpeller = new Map<string, { name: string; pool: number }>();
-  for (const id of activeSpellerIds) {
-    poolBySpeller.set(id, { name: '', pool: 0 });
+  for (const s of activeSpellers) {
+    poolBySpeller.set(s.id, { name: s.name, pool: 0 });
   }
 
   for (const bet of bets) {
@@ -36,15 +36,23 @@ export function calculateOdds(
     const entry = poolBySpeller.get(bet.speller_id);
     if (entry) {
       entry.pool += bet.amount;
-      entry.name = bet.speller_name;
     }
   }
 
   const odds: OddsInfo[] = [];
   for (const [spellerId, { name, pool }] of poolBySpeller) {
     const payoutPerChip = pool > 0 ? totalPool / pool : 0;
-    const impliedOddsValue = pool > 0 ? (totalPool / pool) - 1 : 0;
     const percentage = totalPool > 0 && pool > 0 ? (pool / totalPool) * 100 : 0;
+
+    let impliedOdds = 'N/A';
+    if (pool > 0) {
+      const decimalOdds = totalPool / pool;
+      if (decimalOdds >= 2) {
+        impliedOdds = `+${Math.round((decimalOdds - 1) * 100)}`;
+      } else {
+        impliedOdds = `−${Math.round(100 / (decimalOdds - 1))}`;
+      }
+    }
 
     odds.push({
       spellerId,
@@ -52,7 +60,7 @@ export function calculateOdds(
       poolOnSpeller: pool,
       totalPool,
       payoutPerChip,
-      impliedOdds: pool > 0 ? `${impliedOddsValue.toFixed(1)}:1` : 'N/A',
+      impliedOdds,
       percentage: Math.round(percentage * 10) / 10,
     });
   }
