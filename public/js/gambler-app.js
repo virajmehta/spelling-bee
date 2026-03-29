@@ -8,21 +8,37 @@ import {
 import { formatChips, formatOdds, formatPayout } from '/js/format.js';
 import { showPayoutReveal } from '/js/animations.js';
 
-const auth = requireAuth('gambler');
+const auth = (() => {
+  const a = requireAuth();
+  if (!a || (a.role !== 'gambler' && a.role !== 'observer')) {
+    window.location.href = '/';
+    return null;
+  }
+  return a;
+})();
 if (!auth) throw new Error('Not authorized');
+const isObserver = auth.role === 'observer';
 
 let state = null;
 let payoutShown = false;
 
 document.getElementById('room-info').textContent = `${auth.roomName || 'Room'} — ${auth.displayName}`;
 
+// Observer mode: hide betting UI, update header
+if (isObserver) {
+  document.querySelector('.balance-hero').style.display = 'none';
+  document.getElementById('bet-section').style.display = 'none';
+  document.querySelector('h1').textContent = 'Spectator View';
+}
+
 document.getElementById('logout-btn').addEventListener('click', () => {
   clearAuth();
   window.location.href = '/';
 });
 
-// --- Place Bet ---
+// --- Place Bet (gamblers only) ---
 document.getElementById('place-bet-btn').addEventListener('click', async () => {
+  if (isObserver) return;
   const spellerId = document.getElementById('bet-speller').value;
   const amount = parseInt(document.getElementById('bet-amount').value);
 
@@ -54,8 +70,10 @@ function render(data) {
   document.getElementById('status-bar').innerHTML = renderStatusBar(data.room);
   document.getElementById('room-info').textContent = `${data.room.name} — ${auth.displayName}`;
 
-  // Balance
-  document.getElementById('balance').textContent = formatChips(data.chipBalance || 0);
+  // Balance (hidden for observers)
+  if (!isObserver) {
+    document.getElementById('balance').textContent = formatChips(data.chipBalance || 0);
+  }
 
   // Quick amounts based on balance
   const bal = data.chipBalance || 0;
@@ -79,9 +97,9 @@ function render(data) {
     bannerEl.innerHTML = '<div class="locked-banner">Bets Locked — Round In Progress</div>';
   }
 
-  // Bet section visibility
+  // Bet section visibility (hidden for observers)
   const betSection = document.getElementById('bet-section');
-  betSection.style.display = data.room.bettingOpen && data.room.status !== 'finished' ? '' : 'none';
+  betSection.style.display = !isObserver && data.room.bettingOpen && data.room.status !== 'finished' ? '' : 'none';
 
   // Live turn
   const liveTurnEl = document.getElementById('live-turn');
@@ -180,15 +198,19 @@ function render(data) {
           <td class="speller-name">${esc(o.spellerName)}</td>
           <td class="mono text-gray">—</td>
           <td class="mono text-gray">—</td>
-          <td class="mono">${myTotal > 0 ? `<span class="text-red">-${formatChips(lostTotal)}</span>` : '—'}</td>
+          <td class="mono">${isObserver ? '—' : (myTotal > 0 ? `<span class="text-red">-${formatChips(lostTotal)}</span>` : '—')}</td>
         </tr>`;
       }
+
+      const lastCol = isObserver
+        ? (o.poolOnSpeller ? formatChips(o.poolOnSpeller) : '—')
+        : (myTotal > 0 ? formatChips(myTotal) : '—');
 
       return `<tr>
         <td class="speller-name">${esc(o.spellerName)}</td>
         <td class="mono text-gold">${formatOdds(o.impliedOdds)}</td>
         <td class="mono">${formatPayout(o.payoutPerChip)}</td>
-        <td class="mono">${myTotal > 0 ? formatChips(myTotal) : '—'}</td>
+        <td class="mono">${lastCol}</td>
       </tr>`;
     }).join('');
 
@@ -196,7 +218,7 @@ function render(data) {
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Speller</th><th>Odds</th><th>Payout</th><th>My Bets</th>
+            <th>Speller</th><th>Odds</th><th>Payout</th><th>${isObserver ? 'Pool' : 'My Bets'}</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
@@ -205,10 +227,15 @@ function render(data) {
     `;
   }
 
-  // My Bets
-  const myBets = data.myBets || [];
-  document.getElementById('bet-count').textContent = myBets.length ? `${myBets.length} bet${myBets.length > 1 ? 's' : ''}` : '';
-  document.getElementById('my-bets').innerHTML = renderMyBets(myBets);
+  // My Bets (hidden for observers)
+  const myBetsCard = document.getElementById('my-bets-card');
+  if (isObserver) {
+    myBetsCard.style.display = 'none';
+  } else {
+    const myBets = data.myBets || [];
+    document.getElementById('bet-count').textContent = myBets.length ? `${myBets.length} bet${myBets.length > 1 ? 's' : ''}` : '';
+    document.getElementById('my-bets').innerHTML = renderMyBets(myBets);
+  }
 
   // Recent Activity
   const activity = data.recentActivity || [];
@@ -232,10 +259,41 @@ function render(data) {
   // Spellers
   document.getElementById('speller-list').innerHTML = renderSpellerList(data.spellers);
 
-  // Payout reveal (once)
+  // Payout reveal (once, animated)
   if (data.room.status === 'finished' && data.payout && !payoutShown) {
     payoutShown = true;
     setTimeout(() => showPayoutReveal(data.payout), 500);
+  }
+
+  // Persistent final results (always visible when finished)
+  const finalResultsEl = document.getElementById('final-results');
+  if (data.room.status === 'finished' && data.payout) {
+    const winner = data.payout.winner;
+    const payouts = data.payout.payouts || [];
+    finalResultsEl.style.display = '';
+    finalResultsEl.innerHTML = `
+      <div class="card" style="border: 1px solid var(--gold); border-radius: var(--radius);">
+        <div class="card-header"><h2>Final Results</h2></div>
+        <div style="text-align:center;padding:12px 0">
+          <div class="text-sm text-gray">Winner</div>
+          <div style="font-size:1.4rem;font-weight:800;color:var(--gold)">${winner ? esc(winner.name) : 'N/A'}</div>
+          <div class="text-sm text-gray mt-8">Total Pool: <span class="mono text-gold">${formatChips(data.totalPool)}</span></div>
+        </div>
+        ${payouts.length > 0 ? `
+          <div style="border-top:1px solid rgba(75,85,99,0.3);padding-top:12px">
+            <div class="text-sm text-gray" style="margin-bottom:8px">Payouts</div>
+            ${payouts.map(p => `
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(75,85,99,0.2)">
+                <span>${esc(p.display_name || p.displayName)}</span>
+                <span class="mono text-gold">+${formatChips(p.payout_amount || p.payoutAmount)}</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<div class="text-sm text-gray" style="text-align:center;padding:8px 0">No winning bets — pool unclaimed</div>'}
+      </div>
+    `;
+  } else {
+    finalResultsEl.style.display = 'none';
   }
 }
 
@@ -246,5 +304,5 @@ function esc(str) {
   return el.innerHTML;
 }
 
-const poller = new Poller(7000, render);
+const poller = new Poller(4000, render);
 poller.start();

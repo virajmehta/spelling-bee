@@ -99,16 +99,10 @@ document.getElementById('bee-actions').addEventListener('click', async (e) => {
       poller.forcePoll();
     } else if (action === 'incorrect') {
       await apiPatch(`/bee/turns/${btn.dataset.turnId}`, { result: 'incorrect' });
-      // Auto-eliminate on incorrect
-      await apiPost(`/bee/spellers/${btn.dataset.spellerId}/eliminate`, {});
       showToast('Incorrect — eliminated');
       poller.forcePoll();
     } else if (action === 'undo') {
       await apiPatch(`/bee/turns/${btn.dataset.turnId}`, { result: null });
-      // If speller was eliminated, reinstate them
-      if (btn.dataset.spellerId) {
-        await apiPost(`/bee/spellers/${btn.dataset.spellerId}/reinstate`, {});
-      }
       showToast('Undone');
       poller.forcePoll();
     }
@@ -123,9 +117,6 @@ document.getElementById('current-turns').addEventListener('click', async (e) => 
   if (!btn) return;
   try {
     await apiPatch(`/bee/turns/${btn.dataset.turnId}`, { result: null });
-    if (btn.dataset.spellerId) {
-      await apiPost(`/bee/spellers/${btn.dataset.spellerId}/reinstate`, {});
-    }
     showToast('Undone');
     poller.forcePoll();
   } catch (err) {
@@ -147,6 +138,11 @@ document.getElementById('speller-list').addEventListener('click', async (e) => {
     } else if (action === 'reinstate') {
       await apiPost(`/bee/spellers/${spellerId}/reinstate`, {});
       showToast('Speller reinstated');
+    } else if (action === 'winner') {
+      const spellerName = btn.dataset.spellerName || 'this speller';
+      if (!confirm(`Declare ${spellerName} the winner and settle all bets?`)) return;
+      const result = await apiPost('/bee/finish', { winnerId: spellerId });
+      showToast(result.unclaimedPool ? 'Bee finished — no winning bets' : 'Bee finished — payouts settled');
     } else if (action === 'delete') {
       await apiDelete(`/admin/spellers/${spellerId}`);
       showToast('Speller removed');
@@ -268,7 +264,12 @@ function render(data) {
         : '<span class="badge badge--winner">Winner</span>';
 
     const actions = s.status === 'active'
-      ? `<button class="btn btn--red btn--sm" data-speller-action="eliminate" data-speller-id="${s.id}">Eliminate</button>`
+      ? `
+        <button class="btn btn--red btn--sm" data-speller-action="eliminate" data-speller-id="${s.id}">Eliminate</button>
+        ${data.room.status === 'active'
+          ? `<button class="btn btn--gold btn--sm" data-speller-action="winner" data-speller-id="${s.id}" data-speller-name="${esc(s.name)}">Declare Winner</button>`
+          : ''}
+      `
       : s.status === 'eliminated'
         ? `<button class="btn btn--outline btn--sm" data-speller-action="reinstate" data-speller-id="${s.id}">Reinstate</button>`
         : '';

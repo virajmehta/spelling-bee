@@ -52,6 +52,7 @@ bee.post('/turns', requireRole('admin'), async (c) => {
 
 // Record or undo turn result (admin only)
 bee.patch('/turns/:id', requireRole('admin'), async (c) => {
+  const roomId = c.get('roomId');
   const turnId = c.req.param('id')!;
   const { result } = await c.req.json<{ result: 'correct' | 'incorrect' | null }>();
 
@@ -59,9 +60,43 @@ bee.patch('/turns/:id', requireRole('admin'), async (c) => {
     return c.json({ error: 'result must be correct, incorrect, or null' }, 400);
   }
 
+  const turn = await c.env.DB.prepare(`
+    SELECT t.id, t.result, t.speller_id
+    FROM turns t
+    JOIN rounds r ON t.round_id = r.id
+    WHERE t.id = ? AND r.room_id = ?
+  `)
+    .bind(turnId, roomId)
+    .first<{ id: string; result: 'correct' | 'incorrect' | null; speller_id: string }>();
+
+  if (!turn) {
+    return c.json({ error: 'Turn not found' }, 404);
+  }
+
   await engine.recordTurnResult(c.env.DB, turnId, result);
 
-  const roomId = c.get('roomId');
+  let stateChangeBumpedVersion = false;
+  if (turn.result !== 'incorrect' && result === 'incorrect') {
+    await engine.eliminateSpeller(c.env.DB, roomId, turn.speller_id);
+    stateChangeBumpedVersion = true;
+  } else if (turn.result === 'incorrect' && result !== 'incorrect') {
+    const otherIncorrectTurns = await c.env.DB.prepare(`
+      SELECT COUNT(*) as count
+      FROM turns t
+      JOIN rounds r ON t.round_id = r.id
+      WHERE r.room_id = ?
+        AND t.speller_id = ?
+        AND t.id != ?
+        AND t.result = 'incorrect'
+    `)
+      .bind(roomId, turn.speller_id, turnId)
+      .first<{ count: number }>();
+
+    if ((otherIncorrectTurns?.count || 0) === 0) {
+      await engine.reinstateSpeller(c.env.DB, roomId, turn.speller_id);
+      stateChangeBumpedVersion = true;
+    }
+  }
 
   // Auto-complete round if all active spellers have gone
   if (result !== null) {
@@ -71,7 +106,10 @@ bee.patch('/turns/:id', requireRole('admin'), async (c) => {
     }
   }
 
-  await engine.bumpVersion(c.env.DB, roomId);
+  if (!stateChangeBumpedVersion) {
+    await engine.bumpVersion(c.env.DB, roomId);
+  }
+
   return c.json({ success: true });
 });
 
@@ -98,10 +136,30 @@ bee.post('/finish', requireRole('admin'), async (c) => {
 
   if (!winnerId) return c.json({ error: 'winnerId required' }, 400);
 
+  const room = await c.env.DB.prepare('SELECT status FROM rooms WHERE id = ?')
+    .bind(roomId)
+    .first<{ status: string }>();
+  if (!room) return c.json({ error: 'Room not found' }, 404);
+  if (room.status === 'finished') {
+    return c.json({ error: 'Bee is already finished' }, 409);
+  }
+
+  const winner = await c.env.DB.prepare(
+    "SELECT id FROM spellers WHERE id = ? AND room_id = ? AND status IN ('active', 'winner')"
+  )
+    .bind(winnerId, roomId)
+    .first<{ id: string }>();
+  if (!winner) {
+    return c.json({ error: 'Winner not found in this room' }, 404);
+  }
+
   await engine.finishBee(c.env.DB, roomId, winnerId);
 
   // Compute payouts
   const payoutResult = await computePayouts(c.env.DB, roomId);
+  if (!payoutResult.unclaimedPool) {
+    await engine.bumpVersion(c.env.DB, roomId);
+  }
   return c.json(payoutResult);
 });
 

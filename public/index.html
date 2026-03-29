@@ -289,6 +289,7 @@
           <label>Role</label>
           <div class="role-select">
             <div class="role-btn selected" data-role="gambler">Gambler</div>
+            <div class="role-btn" data-role="observer">Spectator</div>
             <div class="role-btn" data-role="admin">Admin</div>
           </div>
         </div>
@@ -340,6 +341,11 @@
       document.getElementById('expired-msg').style.display = 'block';
     }
 
+    const savedName = localStorage.getItem('sb_name');
+    if (savedName) {
+      document.getElementById('display-name').value = savedName;
+    }
+
     // Role selection
     let selectedRole = 'gambler';
     let createMode = false;
@@ -388,6 +394,7 @@
 
       const displayName = document.getElementById('display-name').value.trim();
       const adminSecret = document.getElementById('admin-secret').value.trim();
+      const rejoinToken = localStorage.getItem('sb_rejoin_token') || undefined;
 
       if (!displayName) {
         errEl.textContent = 'Please enter your name';
@@ -423,7 +430,13 @@
           res = await fetch('/api/auth/join', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code, displayName, role: selectedRole, adminSecret: adminSecret || undefined }),
+            body: JSON.stringify({
+              code,
+              displayName,
+              role: selectedRole,
+              adminSecret: adminSecret || undefined,
+              rejoinToken,
+            }),
           });
           data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Join failed');

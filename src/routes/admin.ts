@@ -34,19 +34,27 @@ admin.post('/room', async (c) => {
 admin.post('/spellers', async (c) => {
   const roomId = c.get('roomId');
   const { spellers } = await c.req.json<{ spellers: string[] }>();
+  const normalizedSpellers = spellers?.map(name => name.trim()).filter(Boolean) || [];
 
-  if (!spellers?.length) return c.json({ error: 'spellers array required' }, 400);
+  if (!normalizedSpellers.length) return c.json({ error: 'spellers array required' }, 400);
 
-  const stmts = spellers.map((name, i) =>
+  const lastOrder = await c.env.DB.prepare(
+    'SELECT COALESCE(MAX(display_order), 0) as max_order FROM spellers WHERE room_id = ?'
+  )
+    .bind(roomId)
+    .first<{ max_order: number }>();
+  const startOrder = lastOrder?.max_order || 0;
+
+  const stmts = normalizedSpellers.map((name, i) =>
     c.env.DB.prepare(
       'INSERT INTO spellers (id, room_id, name, display_order, status) VALUES (?, ?, ?, ?, ?)'
-    ).bind(crypto.randomUUID(), roomId, name.trim(), i + 1, 'active')
+    ).bind(crypto.randomUUID(), roomId, name, startOrder + i + 1, 'active')
   );
 
   stmts.push(c.env.DB.prepare('UPDATE rooms SET version = version + 1 WHERE id = ?').bind(roomId));
   await c.env.DB.batch(stmts);
 
-  return c.json({ added: spellers.length });
+  return c.json({ added: normalizedSpellers.length });
 });
 
 // Credit chips to a gambler
@@ -197,10 +205,18 @@ admin.get('/gamblers', async (c) => {
   return c.json({ gamblers: gamblers.results });
 });
 
-// Delete a speller
+// Delete a speller (only in setup phase)
 admin.delete('/spellers/:id', async (c) => {
   const roomId = c.get('roomId');
   const spellerId = c.req.param('id');
+
+  const room = await c.env.DB.prepare('SELECT status FROM rooms WHERE id = ?')
+    .bind(roomId)
+    .first<{ status: string }>();
+
+  if (room?.status !== 'setup') {
+    return c.json({ error: 'Can only delete spellers during setup' }, 409);
+  }
 
   await c.env.DB.batch([
     c.env.DB.prepare('DELETE FROM spellers WHERE id = ? AND room_id = ?').bind(spellerId, roomId),

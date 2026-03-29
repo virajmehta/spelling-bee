@@ -23,6 +23,7 @@ export async function apiFetch(path, options = {}) {
     localStorage.removeItem('sb_token');
     localStorage.removeItem('sb_role');
     localStorage.removeItem('sb_room');
+    localStorage.removeItem('sb_room_name');
     window.location.href = '/?expired=1';
     throw new Error('Session expired');
   }

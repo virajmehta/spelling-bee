@@ -6,8 +6,9 @@ export function getAuth() {
   const roomId = localStorage.getItem('sb_room');
   const roomName = localStorage.getItem('sb_room_name');
   const displayName = localStorage.getItem('sb_name');
+  const rejoinToken = localStorage.getItem('sb_rejoin_token');
   if (!token || !role) return null;
-  return { token, role, roomId, roomName, displayName };
+  return { token, role, roomId, roomName, displayName, rejoinToken };
 }
 
 export function setAuth(data) {
@@ -16,6 +17,9 @@ export function setAuth(data) {
   localStorage.setItem('sb_room', data.roomId);
   localStorage.setItem('sb_room_name', data.roomName);
   localStorage.setItem('sb_name', data.displayName || '');
+  if (data.rejoinToken) {
+    localStorage.setItem('sb_rejoin_token', data.rejoinToken);
+  }
 }
 
 export function clearAuth() {
@@ -24,10 +28,11 @@ export function clearAuth() {
   localStorage.removeItem('sb_room');
   localStorage.removeItem('sb_room_name');
   localStorage.removeItem('sb_name');
+  localStorage.removeItem('sb_rejoin_token');
 }
 
 export function redirectByRole(role) {
-  const pages = { admin: '/admin', gambler: '/gambler' };
+  const pages = { admin: '/admin.html', gambler: '/gambler.html', observer: '/gambler.html' };
   window.location.href = pages[role] || '/';
 }
 
@@ -38,8 +43,11 @@ export function requireAuth(requiredRole) {
     return null;
   }
   if (requiredRole && auth.role !== requiredRole) {
-    window.location.href = '/';
-    return null;
+    // Allow observer to pass through gambler check
+    if (!(requiredRole === 'gambler' && auth.role === 'observer')) {
+      window.location.href = '/';
+      return null;
+    }
   }
   return auth;
 }
